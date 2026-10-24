@@ -407,6 +407,7 @@ body.has-timer .toast{bottom:calc(var(--tabs) + env(safe-area-inset-bottom,0px) 
 
 /* Sheets */
 .backdrop{position:fixed;inset:0;z-index:30;background:rgba(8,12,18,.5);display:flex;align-items:flex-end;justify-content:center}
+.sheet:focus{outline:none}
 .sheet{width:100%;max-width:640px;max-height:88%;overflow:auto;background:var(--bg);border-radius:22px 22px 0 0;padding:0 16px calc(20px + env(safe-area-inset-bottom,0px));animation:up .22s ease-out}
 @keyframes up{from{transform:translateY(40px);opacity:.4}}
 .sheet-head{position:sticky;top:0;z-index:1;background:var(--bg);display:flex;align-items:center;justify-content:space-between;padding:16px 0 10px}
@@ -464,7 +465,7 @@ body.has-timer .toast{bottom:calc(var(--tabs) + env(safe-area-inset-bottom,0px) 
   <button class="tab" data-a="go" data-t="progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5V19.5h16"/><path d="M7.5 15l4-4.5 3 3 5-6"/></svg>Progress</button>
 </div></nav>
 
-<div class="backdrop" id="backdrop" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="backdrop" id="backdrop" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" tabindex="-1"></div></div>
 
 <script>
 (() => {
@@ -1181,7 +1182,8 @@ function openSheet(html) {
   $('#sheet').innerHTML = html;
   $('#backdrop').hidden = false;
   $('#sheet').scrollTop = 0;
-  const f = $('#sheet').querySelector('button,input,select,textarea'); if (f) f.focus({ preventScroll: true });
+  // Move focus into the panel itself (not its first button), so no button shows a focus ring on open.
+  $('#sheet').focus({ preventScroll: true });
 }
 function closeSheet() {
   $('#backdrop').hidden = true; $('#sheet').innerHTML = ''; picker = null;
