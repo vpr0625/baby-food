@@ -407,6 +407,8 @@ body.has-timer .toast{bottom:calc(var(--tabs) + env(safe-area-inset-bottom,0px) 
 /* Sheets */
 .backdrop{position:fixed;inset:0;z-index:30;background:rgba(8,12,18,.5);display:flex;align-items:flex-end;justify-content:center}
 .sheet:focus{outline:none}
+.backdrop.kb .sheet{max-height:100%;border-radius:18px 18px 0 0;padding-bottom:12px}
+.backdrop.kb .sheet-head{padding-top:12px}
 .sheet{width:100%;max-width:640px;max-height:88%;overflow:auto;background:var(--bg);border-radius:22px 22px 0 0;padding:0 16px calc(20px + env(safe-area-inset-bottom,0px));animation:up .22s ease-out}
 @keyframes up{from{transform:translateY(40px);opacity:.4}}
 .sheet-head{position:sticky;top:0;z-index:1;background:var(--bg);display:flex;align-items:center;justify-content:space-between;padding:16px 0 10px}
@@ -1183,9 +1185,23 @@ function openSheet(html) {
   $('#sheet').scrollTop = 0;
   // Move focus into the panel itself (not its first button), so no button shows a focus ring on open.
   $('#sheet').focus({ preventScroll: true });
+  fitSheet();
 }
+// Keep panels above the on-screen keyboard: iPhone doesn't shrink the screen for pop-ups when the
+// keyboard opens, so size the backdrop to the part of the screen that's actually visible.
+function fitSheet() {
+  const bd = $('#backdrop'), vv = window.visualViewport;
+  if (!vv || bd.hidden) return;
+  const kb = window.innerHeight - vv.height > 80; // keyboard (or similar) is covering part of the screen
+  bd.style.top = kb ? vv.offsetTop + 'px' : '';
+  bd.style.height = kb ? vv.height + 'px' : '';
+  bd.style.bottom = kb ? 'auto' : '';
+  bd.classList.toggle('kb', kb);
+}
+if (window.visualViewport) { visualViewport.addEventListener('resize', fitSheet); visualViewport.addEventListener('scroll', fitSheet); }
 function closeSheet() {
   $('#backdrop').hidden = true; $('#sheet').innerHTML = ''; picker = null;
+  const bd = $('#backdrop'); bd.style.top = bd.style.height = bd.style.bottom = ''; bd.classList.remove('kb');
   if (lastFocus && document.contains(lastFocus)) lastFocus.focus({ preventScroll: true });
 }
 function askConfirm(msg, ok, fn) {
@@ -2103,6 +2119,7 @@ document.addEventListener('change', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('#backdrop').hidden) closeSheet();
   if (e.key === 'Enter' && e.target.id === 'bwval') { e.preventDefault(); A['bw-log'](); }
+  if (e.key === 'Enter' && e.target.id === 'pq') { e.preventDefault(); const first = document.querySelector('#plist [data-a="pick"]'); if (first) first.click(); }
 });
 
 applyTheme();
