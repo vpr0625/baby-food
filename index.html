@@ -249,6 +249,16 @@ main > .note-area{background:var(--surface);box-shadow:inset 0 0 0 1px var(--lin
 .sw i{width:22px;height:22px;border-radius:50%;margin-left:-6px;box-shadow:0 0 0 2.5px var(--surface)}
 
 /* Weekly goal */
+.bk-card{background:color-mix(in srgb,var(--red) 13%,var(--surface));border-radius:14px;padding:12px 14px;margin:4px 0 10px;display:flex;flex-direction:column;gap:2px}
+.bk-card span{font-size:14px;color:var(--ink)}
+.bk-card .finish-row{margin-top:10px}
+.bk-status{background:var(--surface);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:3px;margin-bottom:4px}
+.bk-status.due{box-shadow:inset 0 0 0 2px var(--red)}
+.bk-status span{font-size:14px;color:var(--muted)}
+.due-txt{color:var(--red)!important;font-weight:600}
+.btn.bk-opt{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:3px;padding:12px 14px;white-space:normal;margin-top:8px}
+.btn.bk-opt small{font-size:13.5px;font-weight:500;color:var(--muted);line-height:1.35}
+.bk-file-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
 .warn-card{background:color-mix(in srgb,var(--danger) 14%,var(--surface));border-radius:14px;padding:12px 14px;margin:4px 0 10px;display:flex;flex-direction:column;gap:2px}
 .warn-card b{color:var(--danger)}
 .warn-card span{font-size:14px;color:var(--ink)}
@@ -505,7 +515,7 @@ function fresh() {
   const by = n => exercises.find(e => e.name === n).id;
   return {
     v: 4, exercises, workouts: [], bodyweight: [], plans: [], photos: [], active: null, timer: null,
-    settings: { unit: 'lb', dist: 'mi', rest: 90, autoRest: true, trackBW: false, goal: 0, prAlerts: true, theme: 'dark', accent: 'babyfood', hintRound: 'match', bar: { lb: 45, kg: 20 }, plates: { lb: [45, 25, 10, 5, 2.5], kg: [25, 20, 15, 10, 5, 2.5, 1.25] }, plateList: { lb: [45, 35, 25, 15, 10, 5, 2.5], kg: [25, 20, 15, 10, 5, 2.5, 1.25, 0.5] } },
+    settings: { unit: 'lb', dist: 'mi', rest: 90, autoRest: true, trackBW: false, goal: 0, prAlerts: true, remind: 14, backupPhotos: true, theme: 'dark', accent: 'babyfood', hintRound: 'match', bar: { lb: 45, kg: 20 }, plates: { lb: [45, 25, 10, 5, 2.5], kg: [25, 20, 15, 10, 5, 2.5, 1.25] }, plateList: { lb: [45, 35, 25, 15, 10, 5, 2.5], kg: [25, 20, 15, 10, 5, 2.5, 1.25, 0.5] } },
     routines: [
       { id: uid(), name: 'Full body', items: [by('Squat'), by('Bench press'), by('Barbell row')] },
       { id: uid(), name: 'Cardio day', items: [by('Run'), by('Rowing machine')] }
@@ -524,6 +534,8 @@ function normalize(d) {
   if (typeof d.settings.trackPhotos !== 'boolean') d.settings.trackPhotos = false;
   if (!(d.settings.goal >= 0 && d.settings.goal <= 7)) d.settings.goal = 0;
   if (typeof d.settings.prAlerts !== 'boolean') d.settings.prAlerts = true;
+  if (![0, 7, 14, 30].includes(d.settings.remind)) d.settings.remind = 14;
+  if (typeof d.settings.backupPhotos !== 'boolean') d.settings.backupPhotos = true;
   d.settings.bar = Object.assign({ lb: 45, kg: 20 }, d.settings.bar || {});
   if (!['match', 'plate', 'whole'].includes(d.settings.hintRound)) d.settings.hintRound = 'match';
   d.settings.plates = Object.assign({ lb: [45, 25, 10, 5, 2.5], kg: [25, 20, 15, 10, 5, 2.5, 1.25] }, d.settings.plates || {});
@@ -731,6 +743,7 @@ function viewIdle() {
   const st = S.settings;
   const todays = S.plans.filter(p => p.date === todayStr() && !p.done);
   let h = storageOk ? '' : `<div class="warn-card"><b>Changes aren’t being saved</b><span>This browser is blocking storage, so workouts disappear when you close the app. Use Settings → Copy backup before closing.</span></div>`;
+  h += backupCard();
   h += goalCard();
   h += todays.length ? `<h2 class="sec${h ? '' : ' first'}">Planned for today</h2>` + todays.map(planRow).join('') + `<div class="hero mt">` : `<div class="hero${h ? ' mt' : ''}">`;
   const lastW = S.workouts[0];
@@ -1235,12 +1248,10 @@ function openSettings() {
     <button class="row" data-a="units"><span class="grow"><strong>Units</strong></span>${ICON.chevRight}</button>
     <button class="row" data-a="plate-settings"><span class="grow"><strong>Plates</strong></span>${ICON.chevRight}</button>
     <button class="row" data-a="library"><span class="grow"><strong>Exercise library</strong><small>${S.exercises.filter(e => !e.deleted).length} exercises</small></span>${ICON.chevRight}</button>
+    <button class="row" data-a="backup-page"><span class="grow"><strong>Backup</strong><small class="${backupDue() ? 'due-txt' : ''}">${esc(lastBackupText())}</small></span>${ICON.chevRight}</button>
     <h3 class="plabel">Sample data</h3>
     <p class="note">${S.workouts.some(w => w.sample) ? 'Sample workouts are loaded. Removing them leaves your own workouts untouched.' : 'Adds 12 weeks of made-up workouts, body weight entries and progress photos so you can see how everything looks. You can remove them anytime without touching your own data.'}</p>
     <button class="btn wide" data-a="${S.workouts.some(w => w.sample) ? 'sample-del' : 'sample-add'}">${S.workouts.some(w => w.sample) ? 'Remove sample workouts' : 'Add sample workouts'}</button>
-    <h3 class="plabel">Backup</h3>
-    <p class="note">Your workouts are saved on this device only. Copy a backup now and then, and keep it somewhere safe, like the Notes app. Progress photos aren’t included.</p>
-    <div class="finish-row"><button class="btn" data-a="backup">Copy backup</button><button class="btn" data-a="restore">Restore</button></div>
     <h3 class="plabel">Spreadsheet</h3>
     <p class="note">Export every set you’ve logged as a CSV file for Excel, Numbers or Google Sheets. One row per set.</p>
     <button class="btn wide" data-a="csv">Export to spreadsheet</button>
@@ -1563,6 +1574,74 @@ function openPlates(u, w) {
     <div id="pcout"></div>`);
   $('#pcout').innerHTML = plateResult();
 }
+
+/* ---------- Backups ---------- */
+// Your data only lives on this phone, so backups (to Notes as text, or to a file you can keep in iCloud Drive) are the safety net.
+const ownWorkouts = () => S.workouts.filter(w => !w.sample);
+function lastBackupText() {
+  if (!S.backupAt) return ownWorkouts().length ? 'Not backed up yet' : 'No backup yet';
+  const d = Math.floor((dayStart(Date.now()) - dayStart(S.backupAt)) / 864e5);
+  return `Last backup ${d === 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`}`;
+}
+function backupDue() {
+  const days = S.settings.remind; if (!(days > 0)) return false;
+  const own = ownWorkouts(); if (!own.length) return false;
+  const since = S.backupAt || Math.min(...own.map(w => w.start)), now = Date.now();
+  return now - since > days * 864e5 && now > (S.backupSnooze || 0);
+}
+function backupCard() {
+  if (!backupDue()) return '';
+  const msg = S.backupAt ? `Your last backup was ${Math.floor((Date.now() - S.backupAt) / 864e5)} days ago.` : 'You haven’t backed up your workouts yet.';
+  return `<div class="bk-card"><b>Time for a backup</b><span>${msg} Your data only lives on this phone, so a backup lets you get it back if anything happens.</span>
+    <div class="finish-row"><button class="btn primary" data-a="backup-page">Back up now</button><button class="btn" data-a="bk-later">Remind me later</button></div></div>`;
+}
+async function buildBackup(withPhotos) {
+  const out = { app: 'baby-food', version: 2, exported: new Date().toISOString(),
+    data: { v: S.v || 4, exercises: S.exercises, routines: S.routines, workouts: S.workouts, bodyweight: S.bodyweight, plans: S.plans, settings: S.settings } };
+  if (withPhotos) {
+    out.photos = [];
+    for (const p of S.photos.filter(x => !x.sample)) {
+      const src = photoURL.get(p.id) || await PhotoStore.get(p.id);
+      if (src) out.photos.push({ id: p.id, date: p.date, added: p.added, src });
+    }
+  }
+  return JSON.stringify(out);
+}
+function markBackedUp() { S.backupAt = Date.now(); S.backupSnooze = 0; save(); render(); if (!$('#backdrop').hidden && $('#sheet [data-a="bk-file"]')) openBackup(); }
+function openBackup() {
+  const st = S.settings, own = S.photos.filter(x => !x.sample).length, due = backupDue();
+  openSheet(`${subHead('Backup')}
+    <div class="bk-status${due ? ' due' : ''}"><b>${esc(lastBackupText())}</b><span>Your workouts and photos only live on this phone. A backup lets you get them back if the app is deleted or Safari’s data is cleared.</span></div>
+    <h3 class="plabel">Back up now</h3>
+    <button class="btn wide bk-opt" data-a="bk-notes"><strong>Save to Notes</strong><small>Workouts, routines and settings as text. In the menu that opens, tap Notes. Photos aren’t included.</small></button>
+    <button class="btn wide bk-opt" data-a="bk-file"><strong>Save as a file</strong><small>In the menu that opens, tap Save to Files, then pick iCloud Drive, Google Drive, Dropbox or another location.${own ? (st.backupPhotos ? ` Includes your ${own} progress ${own === 1 ? 'photo' : 'photos'}.` : ' Photos are turned off below.') : ''}</small></button>
+    ${own || st.trackPhotos ? `<div class="setting"><span class="lbl">Include progress photos in file backups</span>${seg('bk-photos', [['1', 'On'], ['0', 'Off']], st.backupPhotos ? '1' : '0')}</div>
+    <p class="note">Photos make the file bigger, roughly a quarter to half a megabyte each, but it means everything comes back if you restore.</p>` : ''}
+    <div class="setting"><label class="lbl" for="remindsel">Remind me to back up</label><select id="remindsel" class="sel" data-f="remind">${[[0, 'Never'], [7, 'Every week'], [14, 'Every 2 weeks'], [30, 'Every month']].map(([v, l]) => `<option value="${v}"${(st.remind || 0) === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
+    <p class="note">A reminder shows on the Today tab when a backup is due.</p>
+    <h3 class="plabel">Restore</h3>
+    <p class="note">Replaces everything on this phone with a backup.</p>
+    <div class="finish-row"><button class="btn" data-a="restore">Paste from Notes</button><label class="btn bk-file-btn">Choose a file<input type="file" id="rfile" accept=".json,application/json,text/plain" class="vh"></label></div>`);
+}
+const dataURLtoBlob = u => { const [h, b] = u.split(','), type = (h.match(/data:([^;]+)/) || [])[1] || 'image/jpeg', bin = atob(b), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], { type }); };
+function doRestore(text) {
+  let o = null, d = null;
+  try { o = JSON.parse(String(text || '').trim()); d = o && o.data ? o.data : o; } catch (e) {}
+  if (!d || !Array.isArray(d.exercises) || !Array.isArray(d.workouts)) { toast('That doesn’t look like a backup from this app'); return; }
+  const photos = o && Array.isArray(o.photos) ? o.photos.filter(p => p && p.id && /^data:image\//.test(p.src || '')) : null;
+  const n = d.workouts.filter(w => !w.sample).length;
+  askConfirm(`This replaces everything on this phone with the backup: ${n} ${n === 1 ? 'workout' : 'workouts'}, plus routines, body weight and settings${photos ? `, and ${photos.length} progress ${photos.length === 1 ? 'photo' : 'photos'}` : ''}.`, 'Replace my data', async () => {
+    let keepPhotos = S.photos;
+    if (photos) {
+      await PhotoStore.clear(); photoURL.clear(); keepPhotos = [];
+      for (const p of photos) { try { await PhotoStore.put(p.id, dataURLtoBlob(p.src)); photoURL.set(p.id, p.src); keepPhotos.push({ id: p.id, date: p.date, added: p.added || Date.now() }); } catch (e) {} }
+    }
+    S = normalize({ v: d.v || 1, exercises: d.exercises, workouts: d.workouts, routines: d.routines, bodyweight: d.bodyweight, plans: d.plans, photos: keepPhotos, settings: d.settings, active: null, timer: null });
+    S.backupAt = Date.now(); draft = null; save(); applyTheme(); render(); toast(photos ? `Backup restored with ${keepPhotos.length} ${keepPhotos.length === 1 ? 'photo' : 'photos'}` : 'Backup restored');
+  });
+}
+// Ask iPhone not to clear the app's storage on its own when space runs low (doesn't prevent a manual wipe).
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
 
 /* ---------- Spreadsheet (CSV) export ---------- */
 function buildCSV() {
@@ -2061,22 +2140,29 @@ const A = {
   'set-dist': b => { S.settings.dist = b.dataset.v; save(); openUnits(); render(); },
   csv: () => exportCSV(),
   'csv-copy': () => { const t = buildCSV().slice(1); (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Spreadsheet data copied'), () => toast('Select the text below and copy it')); },
-  backup: () => {
-    const json = JSON.stringify({ app: 'training-log', version: 1, exported: new Date().toISOString(), data: { exercises: S.exercises, routines: S.routines, workouts: S.workouts, bodyweight: S.bodyweight, plans: S.plans, settings: S.settings } });
-    const fallback = () => openSheet(`${head('Your backup')}<p class="note">Select all of this text, copy it, and keep it somewhere safe.</p><textarea class="field area" rows="9" readonly aria-label="Backup text">${esc(json)}</textarea>`);
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(json).then(() => toast('Backup copied. Paste it somewhere safe.'), fallback);
-    else fallback();
+  'backup-page': () => openBackup(),
+  'bk-later': () => { S.backupSnooze = Date.now() + 3 * 864e5; save(); render(); toast('We’ll remind you again in a few days'); },
+  'bk-photos': b => { S.settings.backupPhotos = b.dataset.v === '1'; save(); openBackup(); },
+  'bk-notes': async () => {
+    const text = await buildBackup(false);
+    try { if (navigator.share) { await navigator.share({ title: 'Baby Food backup', text }); markBackedUp(); toast('Backup saved'); return; } }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+    try { await navigator.clipboard.writeText(text); markBackedUp(); toast('Backup copied. Open Notes and paste it.'); }
+    catch (e) { openSheet(`${subHead('Your backup', 'backup-page', 'Backup')}<p class="note">Select all of this text, copy it, and paste it into a note.</p><textarea class="field area" rows="9" readonly aria-label="Backup text">${esc(text)}</textarea>`); markBackedUp(); }
   },
-  restore: () => openSheet(`${head('Restore backup')}<p class="note">Paste a backup you copied from this app. It replaces everything currently on this device.</p><textarea id="rtext" class="field area" rows="8" placeholder="Paste your backup here" aria-label="Backup text"></textarea><button class="btn primary wide" data-a="do-restore">Restore backup</button>`),
-  'do-restore': () => {
-    let d = null;
-    try { const o = JSON.parse($('#rtext').value); d = o && o.data ? o.data : o; } catch (e) {}
-    if (!d || !Array.isArray(d.exercises) || !Array.isArray(d.workouts)) { toast('That doesn’t look like a backup from this app'); return; }
-    askConfirm('This replaces all workouts, body weight entries, routines and settings on this device with the backup.', 'Replace my data', () => {
-      S = normalize({ v: 1, exercises: d.exercises, workouts: d.workouts, routines: d.routines, bodyweight: d.bodyweight, plans: d.plans, photos: S.photos, settings: d.settings, active: null, timer: null });
-      draft = null; save(); applyTheme(); render(); toast('Backup restored');
-    });
+  'bk-file': async () => {
+    const withPhotos = !!S.settings.backupPhotos && S.photos.some(x => !x.sample);
+    if (withPhotos) toast('Preparing backup…');
+    const json = await buildBackup(withPhotos), name = `baby-food-backup-${todayStr()}.json`;
+    try {
+      const file = new File([json], name, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Baby Food backup' }); markBackedUp(); toast('Backup saved'); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    try { const a = document.createElement('a'); a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(json); a.download = name; document.body.appendChild(a); a.click(); a.remove(); markBackedUp(); toast('Backup file downloaded'); }
+    catch (e) { toast('Couldn’t save a file here. Try Save to Notes instead.'); }
   },
+  restore: () => openSheet(`${subHead('Restore', 'backup-page', 'Backup')}<p class="note">Paste a backup you saved in Notes. It replaces everything currently on this phone.</p><textarea id="rtext" class="field area" rows="8" placeholder="Paste your backup here" aria-label="Backup text"></textarea><button class="btn primary wide" data-a="do-restore">Restore backup</button>`),
+  'do-restore': () => doRestore($('#rtext').value),
   erase: () => askConfirm('This deletes every workout, body weight entry, progress photo, routine and setting on this device.', 'Erase everything', () => { PhotoStore.clear(); photoURL.clear(); S = fresh(); draft = null; doneUntil = 0; save(); applyTheme(); go('log'); toast('All data erased'); }),
   't-plus': () => { if (!S.timer) return; S.timer.end += 15000; S.timer.total = Math.max(S.timer.total, S.timer.end - Date.now()); save(); tick(); },
   't-minus': () => { if (!S.timer) return; S.timer.end -= 15000; if (S.timer.end <= Date.now()) S.timer = null; save(); tick(); },
@@ -2115,6 +2201,8 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const t = e.target, f = t.dataset.f;
   if (t.id === 'phfile') { handlePhoto(t); return; }
+  if (t.id === 'rfile') { const file = t.files && t.files[0]; t.value = ''; if (file) { const r = new FileReader(); r.onload = () => doRestore(r.result); r.onerror = () => toast('Couldn’t read that file'); r.readAsText(file); } return; }
+  if (f === 'remind') { S.settings.remind = +t.value; save(); render(); return; }
   if (f === 'pl-on' && psUnit) { const v = +t.dataset.v, cur = S.settings.plates[psUnit].filter(x => x !== v); if (t.checked) cur.push(v); S.settings.plates[psUnit] = cur; save(); return; }
   if (f === 'cmp-a' || f === 'cmp-b') { cmp[f === 'cmp-a' ? 'a' : 'b'] = t.value; if (cmp.a === cmp.b) cmp[f === 'cmp-a' ? 'b' : 'a'] = null; openCompare(); return; }
   if (f === 'goal') { S.settings.goal = +t.value; save(); render(); return; }
