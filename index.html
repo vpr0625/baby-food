@@ -47,6 +47,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 [hidden]{display:none!important}
 button{cursor:pointer}
 :focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+/* Text boxes draw their focus ring inside their own edge, so headers and card edges can never clip it. */
+.field:focus-visible,.sel:focus-visible,.note-area:focus-visible,.set input:focus-visible,.cmp-pick .sel:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--blue)}
+.field:focus,.sel:focus,.note-area:focus,.set input:focus{outline:none}
+.field:focus,.note-area:focus,.set input:focus{box-shadow:inset 0 0 0 2px var(--blue)}
+#pq{margin-top:4px}
+.sheet .field,.sheet .sel,.sheet .note-area{scroll-margin-top:72px;scroll-margin-bottom:16px}
 
 .top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg)}
 .top-in{max-width:640px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px}
