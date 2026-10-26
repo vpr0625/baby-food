@@ -514,8 +514,8 @@ function fresh() {
   const exercises = SEED.map(([name, t]) => ({ id: uid(), name, type: t === 's' ? 'strength' : t === 'b' ? 'bodyweight' : t === 't' ? 'timed' : 'cardio' }));
   const by = n => exercises.find(e => e.name === n).id;
   return {
-    v: 4, exercises, workouts: [], bodyweight: [], plans: [], photos: [], active: null, timer: null,
-    settings: { unit: 'lb', dist: 'mi', rest: 90, autoRest: true, trackBW: false, goal: 0, prAlerts: true, timerSound: 'on', silentStyle: 'playback', keepAwake: 'workout', remind: 14, backupPhotos: true, theme: 'dark', accent: 'babyfood', hintRound: 'match', bar: { lb: 45, kg: 20 }, plates: { lb: [45, 25, 10, 5, 2.5], kg: [25, 20, 15, 10, 5, 2.5, 1.25] }, plateList: { lb: [45, 35, 25, 15, 10, 5, 2.5], kg: [25, 20, 15, 10, 5, 2.5, 1.25, 0.5] } },
+    v: 5, exercises, workouts: [], bodyweight: [], plans: [], photos: [], active: null, timer: null,
+    settings: { unit: 'lb', dist: 'mi', rest: 90, autoRest: true, trackBW: false, goal: 0, prAlerts: true, timerSound: 'silent', keepAwake: 'workout', remind: 14, backupPhotos: true, theme: 'dark', accent: 'babyfood', hintRound: 'match', bar: { lb: 45, kg: 20 }, plates: { lb: [45, 25, 10, 5, 2.5], kg: [25, 20, 15, 10, 5, 2.5, 1.25] }, plateList: { lb: [45, 35, 25, 15, 10, 5, 2.5], kg: [25, 20, 15, 10, 5, 2.5, 1.25, 0.5] } },
     routines: [
       { id: uid(), name: 'Full body', items: [by('Squat'), by('Bench press'), by('Barbell row')] },
       { id: uid(), name: 'Cardio day', items: [by('Run'), by('Rowing machine')] }
@@ -534,8 +534,8 @@ function normalize(d) {
   if (typeof d.settings.trackPhotos !== 'boolean') d.settings.trackPhotos = false;
   if (!(d.settings.goal >= 0 && d.settings.goal <= 7)) d.settings.goal = 0;
   if (typeof d.settings.prAlerts !== 'boolean') d.settings.prAlerts = true;
-  if (!['on', 'silent', 'off'].includes(d.settings.timerSound)) d.settings.timerSound = 'on';
-  if (!['playback', 'transient'].includes(d.settings.silentStyle)) d.settings.silentStyle = 'playback';
+  if (!['on', 'silent', 'off'].includes(d.settings.timerSound)) d.settings.timerSound = 'silent';
+  delete d.settings.silentStyle;
   if (!['workout', 'always', 'off'].includes(d.settings.keepAwake)) d.settings.keepAwake = 'workout';
   if (![0, 7, 14, 30].includes(d.settings.remind)) d.settings.remind = 14;
   if (typeof d.settings.backupPhotos !== 'boolean') d.settings.backupPhotos = true;
@@ -567,6 +567,8 @@ function normalize(d) {
   // v4: the app is now Baby Food; anyone still on the old default theme moves to the matching one.
   // (Runs after the older upgrades above, so restoring an old backup still gets every step.)
   if ((d.v || 1) < 4) { if (d.settings.accent === 'plates') d.settings.accent = 'babyfood'; d.v = 4; }
+  // v5: "Even on silent" became the default rest timer sound.
+  if (d.v < 5) { if (d.settings.timerSound === 'on') d.settings.timerSound = 'silent'; d.v = 5; }
   d.timer = d.timer && d.timer.end > Date.now() ? d.timer : null;
   return d;
 }
@@ -1345,8 +1347,7 @@ function openWorkoutSettings() {
   const st = S.settings, on = n => `${S.settings.plates[n].length} of ${sizes(n).length} ${n} sizes on`;
   openSheet(`${subHead('Workout')}
     <div class="setting"><span class="lbl">Rest timer sound</span>${seg('set-tsound', [['on', 'On'], ['silent', 'Even on silent'], ['off', 'Off']], st.timerSound)}</div>
-    ${st.timerSound === 'silent' ? `<div class="setting"><span class="lbl">While it beeps, your music should</span>${seg('set-sstyle', [['playback', 'Pause'], ['transient', 'Lower (testing)']], st.silentStyle)}</div>` : ''}
-    <p class="note">${st.timerSound === 'silent' ? (st.silentStyle === 'transient' ? 'Testing: tries to just lower your music during the beep and bring it back after. It may not play on silent. To check, start some music, switch your iPhone to silent, then tap Test sound.' : 'Plays even when your iPhone is on silent. iPhone pauses music from other apps while it beeps, and you’ll need to press play again.') : st.timerSound === 'off' ? 'The timer won’t make a sound.' : 'Follows your iPhone’s silent switch, like a game would. Choose “Even on silent” if you keep your phone on silent at the gym.'} <button class="link" data-a="test-sound">Test sound</button></p>
+    <p class="note">${st.timerSound === 'silent' ? 'Plays even when your iPhone is on silent. iPhone pauses music from other apps while it beeps, so you’ll need to press play again. Choose “On” if you’d rather never interrupt your music.' : st.timerSound === 'off' ? 'The timer won’t make a sound.' : 'Follows your iPhone’s silent switch, like a game would. Choose “Even on silent” if you keep your phone on silent at the gym.'} <button class="link" data-a="test-sound">Test sound</button></p>
     <div class="setting"><span class="lbl">Keep screen on</span>${seg('set-awake', [['workout', 'During workouts'], ['always', 'Always'], ['off', 'Off']], st.keepAwake)}</div>
     <p class="note">${'wakeLock' in navigator ? (st.keepAwake === 'workout' ? 'Your iPhone won’t dim or lock while a workout is in progress. It goes back to normal when you finish.' : st.keepAwake === 'always' ? 'Your iPhone won’t dim or lock while Baby Food is open. This uses more battery.' : 'Your iPhone dims and locks on its usual schedule.') : 'This iPhone doesn’t support keeping the screen on for web apps. It needs iOS 18.4 or later.'}</p>
     <div class="setting"><span class="lbl">Record alerts</span>${seg('set-pra', [['1', 'On'], ['0', 'Off']], st.prAlerts ? '1' : '0')}</div>
@@ -1611,7 +1612,7 @@ function backupCard() {
 }
 async function buildBackup(withPhotos) {
   const out = { app: 'baby-food', version: 2, exported: new Date().toISOString(),
-    data: { v: S.v || 4, exercises: S.exercises, routines: S.routines, workouts: S.workouts, bodyweight: S.bodyweight, plans: S.plans, settings: S.settings } };
+    data: { v: S.v || 5, exercises: S.exercises, routines: S.routines, workouts: S.workouts, bodyweight: S.bodyweight, plans: S.plans, settings: S.settings } };
   if (withPhotos) {
     out.photos = [];
     for (const p of S.photos.filter(x => !x.sample)) {
@@ -1843,8 +1844,6 @@ function playTones(t0) {
   return nodes;
 }
 // "Play in silent mode" switches iPhone's audio session to media playback just for the beep, then back.
-// "Pause music" uses the reliable playback session; "Lower music" tries the transient session (being tested).
-const silentType = () => S.settings.silentStyle === 'transient' ? 'transient' : 'playback';
 function setSession(type) { try { if (navigator.audioSession) navigator.audioSession.type = type; } catch (e) {} }
 function cancelBeep() {
   beepNodes.forEach(n => { try { n.stop(); } catch (e) {} }); beepNodes = []; beepAt = 0;
@@ -1858,7 +1857,7 @@ function scheduleBeep() {
     const wait = Math.max(0, (S.timer.end - Date.now()) / 1000);
     beepAt = actx.currentTime + wait; beepNodes = playTones(beepAt);
     if (S.settings.timerSound === 'silent' && navigator.audioSession) {
-      sessTimers.push(setTimeout(() => setSession(silentType()), Math.max(0, wait * 1000 - 400)));
+      sessTimers.push(setTimeout(() => setSession('playback'), Math.max(0, wait * 1000 - 400)));
       sessTimers.push(setTimeout(() => setSession('auto'), wait * 1000 + 2200));
     }
   } catch (e) {}
@@ -1867,7 +1866,7 @@ function beepNow() {
   if (S.settings.timerSound === 'off') return;
   try {
     if (!actx) return;
-    if (S.settings.timerSound === 'silent') { setSession(silentType()); sessTimers.push(setTimeout(() => setSession('auto'), 2200)); }
+    if (S.settings.timerSound === 'silent') { setSession('playback'); sessTimers.push(setTimeout(() => setSession('auto'), 2200)); }
     if (actx.state !== 'running') actx.resume().catch(() => {});
     playTones(actx.currentTime + .05);
   } catch (e) {}
@@ -1878,7 +1877,7 @@ function timerFinished() {
   beepAt = 0; beepFor = null;
   try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
 }
-function testSound() { unlockAudio(); if (S.settings.timerSound === 'silent') setSession(silentType()); try { playTones(actx.currentTime + .05); } catch (e) {} if (S.settings.timerSound === 'silent') setTimeout(() => setSession('auto'), 2200); }
+function testSound() { unlockAudio(); if (S.settings.timerSound === 'silent') setSession('playback'); try { playTones(actx.currentTime + .05); } catch (e) {} if (S.settings.timerSound === 'silent') setTimeout(() => setSession('auto'), 2200); }
 function startTimer(sec) { S.timer = { end: Date.now() + sec * 1000, total: sec * 1000 }; doneUntil = 0; save(); tick(); }
 function tick() {
   const el = $('#timer'), now = Date.now();
@@ -2174,7 +2173,6 @@ const A = {
   tracking: () => openTracking(),
   'workout-settings': () => openWorkoutSettings(),
   'set-awake': b => { S.settings.keepAwake = b.dataset.v; save(); syncWake(); openWorkoutSettings(); },
-  'set-sstyle': b => { S.settings.silentStyle = b.dataset.v; save(); openWorkoutSettings(); },
   'set-tsound': b => { S.settings.timerSound = b.dataset.v; save(); openWorkoutSettings(); },
   'test-sound': () => testSound(),
   'set-pra': b => { S.settings.prAlerts = b.dataset.v === '1'; save(); openWorkoutSettings(); },
