@@ -1247,9 +1247,9 @@ function openSettings() {
   const st = S.settings;
   openSheet(`${head('Settings')}
     <button class="row" data-a="appearance"><span class="grow"><strong>Appearance</strong></span>${ICON.chevRight}</button>
+    <button class="row" data-a="workout-settings"><span class="grow"><strong>Workout</strong></span>${ICON.chevRight}</button>
     <button class="row" data-a="tracking"><span class="grow"><strong>Tracking</strong></span>${ICON.chevRight}</button>
     <button class="row" data-a="units"><span class="grow"><strong>Units</strong></span>${ICON.chevRight}</button>
-    <button class="row" data-a="plate-settings"><span class="grow"><strong>Plates</strong></span>${ICON.chevRight}</button>
     <button class="row" data-a="library"><span class="grow"><strong>Exercise library</strong><small>${S.exercises.filter(e => !e.deleted).length} exercises</small></span>${ICON.chevRight}</button>
     <button class="row" data-a="backup-page"><span class="grow"><strong>Backup</strong><small class="${backupDue() ? 'due-txt' : ''}">${esc(lastBackupText())}</small></span>${ICON.chevRight}</button>
     <h3 class="plabel">Sample data</h3>
@@ -1340,6 +1340,17 @@ function openAppearance() {
     <div class="setting"><span class="lbl">Mode</span>${seg('set-theme', [['dark', 'Dark'], ['light', 'Light']], st.theme)}</div>
     <div class="setting"><span class="lbl">Theme</span><div class="themes" role="group" aria-label="Theme">${window.THEMES.map(t => { const v = t[st.theme === 'light' ? 'light' : 'dark']; return `<button class="theme" data-a="set-accent" data-v="${t.id}" aria-pressed="${t.id === st.accent}"><span class="sw" aria-hidden="true">${['red', 'blue', 'yellow', 'green'].map(k => `<i style="background:${v[k]}"></i>`).join('')}</span><span class="tn"><strong>${t.name}</strong><small>${t.blurb}</small></span></button>`; }).join('')}</div></div>`);
 }
+function openWorkoutSettings() {
+  const st = S.settings, on = n => `${S.settings.plates[n].length} of ${sizes(n).length} ${n} sizes on`;
+  openSheet(`${subHead('Workout')}
+    <div class="setting"><span class="lbl">Rest timer sound</span>${seg('set-tsound', [['on', 'On'], ['silent', 'Even on silent'], ['off', 'Off']], st.timerSound)}</div>
+    <p class="note">${st.timerSound === 'silent' ? 'Plays even when your iPhone is on silent. iPhone may pause music from other apps while the beep plays.' : st.timerSound === 'off' ? 'The timer won’t make a sound.' : 'Follows your iPhone’s silent switch, like a game would. Choose “Even on silent” if you keep your phone on silent at the gym.'} <button class="link" data-a="test-sound">Test sound</button></p>
+    <div class="setting"><span class="lbl">Keep screen on</span>${seg('set-awake', [['workout', 'During workouts'], ['always', 'Always'], ['off', 'Off']], st.keepAwake)}</div>
+    <p class="note">${'wakeLock' in navigator ? (st.keepAwake === 'workout' ? 'Your iPhone won’t dim or lock while a workout is in progress. It goes back to normal when you finish.' : st.keepAwake === 'always' ? 'Your iPhone won’t dim or lock while Baby Food is open. This uses more battery.' : 'Your iPhone dims and locks on its usual schedule.') : 'This iPhone doesn’t support keeping the screen on for web apps. It needs iOS 18.4 or later.'}</p>
+    <div class="setting"><span class="lbl">Record alerts</span>${seg('set-pra', [['1', 'On'], ['0', 'Off']], st.prAlerts ? '1' : '0')}</div>
+    <p class="note">Shows a quick “New record!” message during a workout when a set beats your best for that exercise. Warm-ups never count.</p>
+    <button class="row" data-a="plate-settings"><span class="grow"><strong>Plates</strong><small>${on('lb')}, ${on('kg')}</small></span>${ICON.chevRight}</button>`);
+}
 function openTracking() {
   const st = S.settings;
   openSheet(`${subHead('Tracking')}
@@ -1348,13 +1359,7 @@ function openTracking() {
     <div class="setting"><span class="lbl">Track body weight</span>${seg('set-bw', [['1', 'On'], ['0', 'Off']], st.trackBW ? '1' : '0')}</div>
     <p class="note">Shows body weight logging and a chart on the Progress tab. Turning it off hides them but keeps your entries.</p>
     <div class="setting"><span class="lbl">Progress photos</span>${seg('set-photos', [['1', 'On'], ['0', 'Off']], st.trackPhotos ? '1' : '0')}</div>
-    <p class="note">Adds a Photos view to the Progress tab. Photos stay on this device. Turning it off hides them but keeps your photos.</p>
-    <div class="setting"><span class="lbl">Keep screen on</span>${seg('set-awake', [['workout', 'During workouts'], ['always', 'Always'], ['off', 'Off']], st.keepAwake)}</div>
-    <p class="note">${'wakeLock' in navigator ? (st.keepAwake === 'workout' ? 'Your iPhone won’t dim or lock while a workout is in progress. It goes back to normal when you finish.' : st.keepAwake === 'always' ? 'Your iPhone won’t dim or lock while Baby Food is open. This uses more battery.' : 'Your iPhone dims and locks on its usual schedule.') : 'This iPhone doesn’t support keeping the screen on for web apps. It needs iOS 18.4 or later.'}</p>
-    <div class="setting"><span class="lbl">Rest timer sound</span>${seg('set-tsound', [['on', 'On'], ['silent', 'Even on silent'], ['off', 'Off']], st.timerSound)}</div>
-    <p class="note">${st.timerSound === 'silent' ? 'Plays even when your iPhone is on silent. iPhone may pause music from other apps while the beep plays.' : st.timerSound === 'off' ? 'The timer won’t make a sound.' : 'Follows your iPhone’s silent switch, like a game would. Choose “Even on silent” if you keep your phone on silent at the gym.'} <button class="link" data-a="test-sound">Test sound</button></p>
-    <div class="setting"><span class="lbl">Record alerts</span>${seg('set-pra', [['1', 'On'], ['0', 'Off']], st.prAlerts ? '1' : '0')}</div>
-    <p class="note">Shows a quick “New record!” message during a workout when a set beats your best for that exercise. Warm-ups never count.</p>`);
+    <p class="note">Adds a Photos view to the Progress tab. Photos stay on this device. Turning it off hides them but keeps your photos.</p>`);
 }
 // Converted hints for barbell-style lifts round to weights you can actually load.
 function hintStep(u) {
@@ -1563,7 +1568,7 @@ let psUnit = null;
 function openPlateSettings(u) {
   psUnit = u || psUnit || S.settings.unit;
   const U = psUnit, on = new Set(S.settings.plates[U]), list = sizes(U);
-  openSheet(`${subHead('Plates')}
+  openSheet(`${subHead('Plates', 'workout-settings', 'Workout')}
     <div class="setting">${seg('ps-unit', [['lb', 'Pounds'], ['kg', 'Kilograms']], U)}</div>
     <p class="note">Switch off plates your gym doesn’t have, or add sizes it does. The plate calculator only uses plates that are on.</p>
     <div class="prows">${list.length ? list.map(p => `<div class="prow"><i style="background:${plateColor(U, p)}"></i><b>${fmtN(p, 2)} ${U}</b><input type="checkbox" class="switch" data-f="pl-on" data-v="${p}"${on.has(p) ? ' checked' : ''} aria-label="${fmtN(p, 2)} ${U} plates available"><button class="icon" data-a="pl-del" data-v="${p}" aria-label="Delete the ${fmtN(p, 2)} ${U} plate size">×</button></div>`).join('') : '<p class="note pad">No plate sizes yet. Add one below.</p>'}</div>
@@ -2163,10 +2168,11 @@ const A = {
   'sample-del': () => askConfirm('This removes the sample workouts, body weight entries and photos. Your own data stays.', 'Remove samples', () => { removeSamples(); prog.ex = null; prog.sel = null; save(); render(); toast('Sample workouts removed'); }),
   appearance: () => openAppearance(),
   tracking: () => openTracking(),
-  'set-awake': b => { S.settings.keepAwake = b.dataset.v; save(); syncWake(); openTracking(); },
-  'set-tsound': b => { S.settings.timerSound = b.dataset.v; save(); openTracking(); },
+  'workout-settings': () => openWorkoutSettings(),
+  'set-awake': b => { S.settings.keepAwake = b.dataset.v; save(); syncWake(); openWorkoutSettings(); },
+  'set-tsound': b => { S.settings.timerSound = b.dataset.v; save(); openWorkoutSettings(); },
   'test-sound': () => testSound(),
-  'set-pra': b => { S.settings.prAlerts = b.dataset.v === '1'; save(); openTracking(); },
+  'set-pra': b => { S.settings.prAlerts = b.dataset.v === '1'; save(); openWorkoutSettings(); },
   'set-photos': b => { S.settings.trackPhotos = b.dataset.v === '1'; if (!S.settings.trackPhotos) progView = 'charts'; save(); openTracking(); render(); },
   'prog-view': b => { progView = b.dataset.v; render(); },
   'ph-open': b => openPhoto(b.dataset.id),
