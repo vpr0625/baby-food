@@ -1347,7 +1347,7 @@ function openWorkoutSettings() {
   const st = S.settings, on = n => `${S.settings.plates[n].length} of ${sizes(n).length} ${n} sizes on`;
   openSheet(`${subHead('Workout')}
     <div class="setting"><span class="lbl">Rest timer sound</span>${seg('set-tsound', [['on', 'On'], ['silent', 'Even on silent'], ['off', 'Off']], st.timerSound)}</div>
-    <p class="note">${st.timerSound === 'silent' ? 'Plays even when your iPhone is on silent. iPhone pauses music from other apps while it beeps, so you’ll need to press play again. Choose “On” if you’d rather never interrupt your music.' : st.timerSound === 'off' ? 'The timer won’t make a sound.' : 'Follows your iPhone’s silent switch, like a game would. Choose “Even on silent” if you keep your phone on silent at the gym.'} <button class="link" data-a="test-sound">Test sound</button></p>
+    <p class="note">${st.timerSound === 'silent' ? 'Plays even when your iPhone is on silent. iPhone pauses music from other apps while it beeps, so you’ll need to press play again. Choose “On” if you’d rather never interrupt your music.' : st.timerSound === 'off' ? 'The timer won’t make a sound.' : 'Follows your iPhone’s silent switch, like a game would. Choose “Even on silent” if you keep your phone on silent at the gym.'}${st.timerSound === 'off' ? '' : ' <button class="link" data-a="test-sound">Test sound</button>'}</p>
     <div class="setting"><span class="lbl">Keep screen on</span>${seg('set-awake', [['workout', 'During workouts'], ['always', 'Always'], ['off', 'Off']], st.keepAwake)}</div>
     <p class="note">${'wakeLock' in navigator ? (st.keepAwake === 'workout' ? 'Your iPhone won’t dim or lock while a workout is in progress. It goes back to normal when you finish.' : st.keepAwake === 'always' ? 'Your iPhone won’t dim or lock while Baby Food is open. This uses more battery.' : 'Your iPhone dims and locks on its usual schedule.') : 'This iPhone doesn’t support keeping the screen on for web apps. It needs iOS 18.4 or later.'}</p>
     <div class="setting"><span class="lbl">Record alerts</span>${seg('set-pra', [['1', 'On'], ['0', 'Off']], st.prAlerts ? '1' : '0')}</div>
@@ -1877,7 +1877,7 @@ function timerFinished() {
   beepAt = 0; beepFor = null;
   try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
 }
-function testSound() { unlockAudio(); if (S.settings.timerSound === 'silent') setSession('playback'); try { playTones(actx.currentTime + .05); } catch (e) {} if (S.settings.timerSound === 'silent') setTimeout(() => setSession('auto'), 2200); }
+function testSound() { if (S.settings.timerSound === 'off') return; unlockAudio(); if (S.settings.timerSound === 'silent') setSession('playback'); try { playTones(actx.currentTime + .05); } catch (e) {} if (S.settings.timerSound === 'silent') setTimeout(() => setSession('auto'), 2200); }
 function startTimer(sec) { S.timer = { end: Date.now() + sec * 1000, total: sec * 1000 }; doneUntil = 0; save(); tick(); }
 function tick() {
   const el = $('#timer'), now = Date.now();
