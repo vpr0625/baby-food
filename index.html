@@ -515,7 +515,7 @@ function fresh() {
   const by = n => exercises.find(e => e.name === n).id;
   return {
     v: 4, exercises, workouts: [], bodyweight: [], plans: [], photos: [], active: null, timer: null,
-    settings: { unit: 'lb', dist: 'mi', rest: 90, autoRest: true, trackBW: false, goal: 0, prAlerts: true, remind: 14, backupPhotos: true, theme: 'dark', accent: 'babyfood', hintRound: 'match', bar: { lb: 45, kg: 20 }, plates: { lb: [45, 25, 10, 5, 2.5], kg: [25, 20, 15, 10, 5, 2.5, 1.25] }, plateList: { lb: [45, 35, 25, 15, 10, 5, 2.5], kg: [25, 20, 15, 10, 5, 2.5, 1.25, 0.5] } },
+    settings: { unit: 'lb', dist: 'mi', rest: 90, autoRest: true, trackBW: false, goal: 0, prAlerts: true, timerSound: 'on', keepAwake: 'workout', remind: 14, backupPhotos: true, theme: 'dark', accent: 'babyfood', hintRound: 'match', bar: { lb: 45, kg: 20 }, plates: { lb: [45, 25, 10, 5, 2.5], kg: [25, 20, 15, 10, 5, 2.5, 1.25] }, plateList: { lb: [45, 35, 25, 15, 10, 5, 2.5], kg: [25, 20, 15, 10, 5, 2.5, 1.25, 0.5] } },
     routines: [
       { id: uid(), name: 'Full body', items: [by('Squat'), by('Bench press'), by('Barbell row')] },
       { id: uid(), name: 'Cardio day', items: [by('Run'), by('Rowing machine')] }
@@ -534,6 +534,8 @@ function normalize(d) {
   if (typeof d.settings.trackPhotos !== 'boolean') d.settings.trackPhotos = false;
   if (!(d.settings.goal >= 0 && d.settings.goal <= 7)) d.settings.goal = 0;
   if (typeof d.settings.prAlerts !== 'boolean') d.settings.prAlerts = true;
+  if (!['on', 'silent', 'off'].includes(d.settings.timerSound)) d.settings.timerSound = 'on';
+  if (!['workout', 'always', 'off'].includes(d.settings.keepAwake)) d.settings.keepAwake = 'workout';
   if (![0, 7, 14, 30].includes(d.settings.remind)) d.settings.remind = 14;
   if (typeof d.settings.backupPhotos !== 'boolean') d.settings.backupPhotos = true;
   d.settings.bar = Object.assign({ lb: 45, kg: 20 }, d.settings.bar || {});
@@ -734,6 +736,7 @@ function render() {
   tick();
   loadPhotos();
   document.querySelectorAll('.note-area').forEach(grow);
+  syncWake();
 }
 function go(t) { tab = t; render(); window.scrollTo(0, 0); }
 
@@ -1346,6 +1349,10 @@ function openTracking() {
     <p class="note">Shows body weight logging and a chart on the Progress tab. Turning it off hides them but keeps your entries.</p>
     <div class="setting"><span class="lbl">Progress photos</span>${seg('set-photos', [['1', 'On'], ['0', 'Off']], st.trackPhotos ? '1' : '0')}</div>
     <p class="note">Adds a Photos view to the Progress tab. Photos stay on this device. Turning it off hides them but keeps your photos.</p>
+    <div class="setting"><span class="lbl">Keep screen on</span>${seg('set-awake', [['workout', 'During workouts'], ['always', 'Always'], ['off', 'Off']], st.keepAwake)}</div>
+    <p class="note">${'wakeLock' in navigator ? (st.keepAwake === 'workout' ? 'Your iPhone won’t dim or lock while a workout is in progress. It goes back to normal when you finish.' : st.keepAwake === 'always' ? 'Your iPhone won’t dim or lock while Baby Food is open. This uses more battery.' : 'Your iPhone dims and locks on its usual schedule.') : 'This iPhone doesn’t support keeping the screen on for web apps. It needs iOS 18.4 or later.'}</p>
+    <div class="setting"><span class="lbl">Rest timer sound</span>${seg('set-tsound', [['on', 'On'], ['silent', 'Even on silent'], ['off', 'Off']], st.timerSound)}</div>
+    <p class="note">${st.timerSound === 'silent' ? 'Plays even when your iPhone is on silent. iPhone may pause music from other apps while the beep plays.' : st.timerSound === 'off' ? 'The timer won’t make a sound.' : 'Follows your iPhone’s silent switch, like a game would. Choose “Even on silent” if you keep your phone on silent at the gym.'} <button class="link" data-a="test-sound">Test sound</button></p>
     <div class="setting"><span class="lbl">Record alerts</span>${seg('set-pra', [['1', 'On'], ['0', 'Off']], st.prAlerts ? '1' : '0')}</div>
     <p class="note">Shows a quick “New record!” message during a workout when a set beats your best for that exercise. Warm-ups never count.</p>`);
 }
@@ -1781,33 +1788,95 @@ function finish() {
 function discardNow() { S.active = null; S.timer = null; doneUntil = 0; save(); render(); }
 
 /* ---------- Rest timer ---------- */
-let actx = null;
+/* ---------- Keep the screen on ----------
+   Uses the Screen Wake Lock API. iPhone releases the lock whenever the app is hidden, so it's
+   re-requested every time the app comes back on screen. */
+let wakeSentinel = null, wakePending = false;
+const wantWake = () => S.settings.keepAwake === 'always' || (S.settings.keepAwake === 'workout' && !!S.active);
+async function syncWake() {
+  if (!('wakeLock' in navigator)) return;
+  const want = wantWake() && document.visibilityState === 'visible';
+  if (want && !wakeSentinel && !wakePending) {
+    wakePending = true;
+    try {
+      const sent = await navigator.wakeLock.request('screen');
+      if (!wantWake()) { sent.release().catch(() => {}); }
+      else { wakeSentinel = sent; sent.addEventListener('release', () => { if (wakeSentinel === sent) { wakeSentinel = null; setTimeout(syncWake, 400); } }); }
+    } catch (e) {} finally { wakePending = false; }
+  } else if (!want && wakeSentinel) {
+    const sent = wakeSentinel; wakeSentinel = null; try { await sent.release(); } catch (e) {}
+  }
+}
+document.addEventListener('visibilitychange', syncWake);
+
+/* ---------- Rest timer sound ----------
+   iPhone only lets a page start sound during a tap, and pauses its audio clock while the screen is off.
+   So the finish beep is scheduled ahead of time, at the moment you tap (check a set, Start, ±15),
+   and rescheduled whenever the timer changes. If the phone slept and the beep was missed, it plays
+   as soon as the app is back on screen. */
+let actx = null, beepNodes = [], beepAt = 0, beepFor = null, sessTimers = [];
 function unlockAudio() {
   try {
     if (!actx) { const C = window.AudioContext || window.webkitAudioContext; if (C) actx = new C(); }
-    if (actx && actx.state === 'suspended') actx.resume();
+    if (!actx) return;
+    if (actx.state !== 'running') actx.resume().catch(() => {});
+    // A silent blip fully wakes the audio on older iPhones.
+    const buf = actx.createBuffer(1, 1, 22050), src = actx.createBufferSource(); src.buffer = buf; src.connect(actx.destination); src.start(0);
   } catch (e) {}
+  if (S.timer && !beepAt) beepFor = undefined; // a timer is running without a scheduled beep (e.g. after reopening): schedule it now
 }
-function beep() {
+function playTones(t0) {
+  const nodes = [];
+  [0, .22, .44, .9, 1.12, 1.34].forEach((o, k) => {
+    const os = actx.createOscillator(), g = actx.createGain();
+    os.type = 'triangle'; os.frequency.value = k % 3 === 2 ? 1175 : 880;
+    g.gain.setValueAtTime(.0001, t0 + o); g.gain.exponentialRampToValueAtTime(.6, t0 + o + .02); g.gain.exponentialRampToValueAtTime(.0001, t0 + o + .18);
+    os.connect(g); g.connect(actx.destination); os.start(t0 + o); os.stop(t0 + o + .2); nodes.push(os);
+  });
+  return nodes;
+}
+// "Play in silent mode" switches iPhone's audio session to media playback just for the beep, then back.
+function setSession(type) { try { if (navigator.audioSession) navigator.audioSession.type = type; } catch (e) {} }
+function cancelBeep() {
+  beepNodes.forEach(n => { try { n.stop(); } catch (e) {} }); beepNodes = []; beepAt = 0;
+  sessTimers.forEach(clearTimeout); sessTimers = [];
+}
+function scheduleBeep() {
+  cancelBeep(); beepFor = S.timer ? S.timer.end : null;
+  if (!S.timer || !actx || S.settings.timerSound === 'off') return;
   try {
-    if (actx) {
-      const t0 = actx.currentTime;
-      [0, .22, .44].forEach((o, k) => {
-        const os = actx.createOscillator(), g = actx.createGain();
-        os.frequency.value = k === 2 ? 1175 : 880;
-        g.gain.setValueAtTime(.0001, t0 + o); g.gain.exponentialRampToValueAtTime(.35, t0 + o + .02); g.gain.exponentialRampToValueAtTime(.0001, t0 + o + .18);
-        os.connect(g); g.connect(actx.destination); os.start(t0 + o); os.stop(t0 + o + .2);
-      });
+    if (actx.state !== 'running') actx.resume().catch(() => {});
+    const wait = Math.max(0, (S.timer.end - Date.now()) / 1000);
+    beepAt = actx.currentTime + wait; beepNodes = playTones(beepAt);
+    if (S.settings.timerSound === 'silent' && navigator.audioSession) {
+      sessTimers.push(setTimeout(() => setSession('playback'), Math.max(0, wait * 1000 - 400)));
+      sessTimers.push(setTimeout(() => setSession('auto'), wait * 1000 + 2200));
     }
   } catch (e) {}
+}
+function beepNow() {
+  if (S.settings.timerSound === 'off') return;
+  try {
+    if (!actx) return;
+    if (S.settings.timerSound === 'silent') { setSession('playback'); sessTimers.push(setTimeout(() => setSession('auto'), 2200)); }
+    if (actx.state !== 'running') actx.resume().catch(() => {});
+    playTones(actx.currentTime + .05);
+  } catch (e) {}
+}
+function timerFinished() {
+  // The scheduled beep already played if the audio clock got there; otherwise (phone slept) play it now.
+  if (!(actx && beepAt && actx.currentTime >= beepAt - .05)) { cancelBeep(); beepNow(); }
+  beepAt = 0; beepFor = null;
   try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
 }
+function testSound() { unlockAudio(); if (S.settings.timerSound === 'silent') setSession('playback'); try { playTones(actx.currentTime + .05); } catch (e) {} if (S.settings.timerSound === 'silent') setTimeout(() => setSession('auto'), 2200); }
 function startTimer(sec) { S.timer = { end: Date.now() + sec * 1000, total: sec * 1000 }; doneUntil = 0; save(); tick(); }
 function tick() {
   const el = $('#timer'), now = Date.now();
+  if ((S.timer ? S.timer.end : null) !== beepFor && !(S.timer && S.timer.end <= now)) scheduleBeep();
   if (S.timer) {
     const left = S.timer.end - now;
-    if (left <= 0) { S.timer = null; save(); beep(); doneUntil = now + 4000; }
+    if (left <= 0) { S.timer = null; save(); timerFinished(); doneUntil = now + 4000; }
     else {
       el.hidden = false; el.classList.remove('done');
       $('#tlabel').textContent = 'Rest';
@@ -2094,6 +2163,9 @@ const A = {
   'sample-del': () => askConfirm('This removes the sample workouts, body weight entries and photos. Your own data stays.', 'Remove samples', () => { removeSamples(); prog.ex = null; prog.sel = null; save(); render(); toast('Sample workouts removed'); }),
   appearance: () => openAppearance(),
   tracking: () => openTracking(),
+  'set-awake': b => { S.settings.keepAwake = b.dataset.v; save(); syncWake(); openTracking(); },
+  'set-tsound': b => { S.settings.timerSound = b.dataset.v; save(); openTracking(); },
+  'test-sound': () => testSound(),
   'set-pra': b => { S.settings.prAlerts = b.dataset.v === '1'; save(); openTracking(); },
   'set-photos': b => { S.settings.trackPhotos = b.dataset.v === '1'; if (!S.settings.trackPhotos) progView = 'charts'; save(); openTracking(); render(); },
   'prog-view': b => { progView = b.dataset.v; render(); },
@@ -2164,12 +2236,13 @@ const A = {
   restore: () => openSheet(`${subHead('Restore', 'backup-page', 'Backup')}<p class="note">Paste a backup you saved in Notes. It replaces everything currently on this phone.</p><textarea id="rtext" class="field area" rows="8" placeholder="Paste your backup here" aria-label="Backup text"></textarea><button class="btn primary wide" data-a="do-restore">Restore backup</button>`),
   'do-restore': () => doRestore($('#rtext').value),
   erase: () => askConfirm('This deletes every workout, body weight entry, progress photo, routine and setting on this device.', 'Erase everything', () => { PhotoStore.clear(); photoURL.clear(); S = fresh(); draft = null; doneUntil = 0; save(); applyTheme(); go('log'); toast('All data erased'); }),
-  't-plus': () => { if (!S.timer) return; S.timer.end += 15000; S.timer.total = Math.max(S.timer.total, S.timer.end - Date.now()); save(); tick(); },
-  't-minus': () => { if (!S.timer) return; S.timer.end -= 15000; if (S.timer.end <= Date.now()) S.timer = null; save(); tick(); },
-  't-skip': () => { S.timer = null; doneUntil = 0; save(); tick(); }
+  't-plus': () => { unlockAudio(); if (!S.timer) return; S.timer.end += 15000; S.timer.total = Math.max(S.timer.total, S.timer.end - Date.now()); save(); tick(); },
+  't-minus': () => { unlockAudio(); if (!S.timer) return; S.timer.end -= 15000; if (S.timer.end <= Date.now()) S.timer = null; save(); tick(); },
+  't-skip': () => { unlockAudio(); S.timer = null; doneUntil = 0; save(); tick(); }
 };
 
 document.addEventListener('click', e => {
+  if (wantWake() && !wakeSentinel) syncWake();
   if (e.target.id === 'backdrop') { closeSheet(); return; }
   const b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
   const fn = A[b.dataset.a]; if (fn) fn(b, e);
